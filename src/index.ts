@@ -2,6 +2,7 @@ import _ from "lodash";
 import OCR from "./ocr";
 import DocumentParser from "./document-parser";
 import {
+  ExtractDocumentDetailsFromB64StringRequest,
   ExtractDocumentDetailsFromImageRequest,
   ExtractDocumentDetailsFromImageResponse
 } from "./interfaces/SmartDocuments";
@@ -39,6 +40,27 @@ const extractRawText = async (
   }
   return await OCR[ocrLibrary].extractDocumentText({
     document_url: documentURL,
+    api_key: apiKey,
+    timeout: ocrTimeout
+  });
+};
+
+const ocrRequest = async (
+  documentB64: string,
+  ocrLibrary: string,
+  customOCR: CustomOCR,
+  ocrTimeout: number
+) => {
+  const apiKey = getAPIKeyFromConfig(ocrLibrary);
+  if (!_.isEmpty(customOCR)) {
+    return await customOCR.getDocumentText({
+      document_b64: documentB64,
+      api_key: apiKey,
+      timeout: ocrTimeout
+    });
+  }
+  return await OCR[ocrLibrary].getDocumentText({
+    document_b64: documentB64,
     api_key: apiKey,
     timeout: ocrTimeout
   });
@@ -92,6 +114,47 @@ SmartDocuments.extractDocumentDetailsFromImage = async (
     customOCR,
     ocrTimeout
   );
+
+  const rawText = _.get(ocrResponse, "raw_text", []);
+  const isValidText = validateDocumentText(rawText);
+  if (!isValidText) {
+    return Constants.EMPTY_RESPONSE;
+  }
+
+  const documentDetails = await parseDocumentDetails(
+    documentType,
+    rawText,
+    customParser
+  );
+
+  return {
+    raw_text: rawText,
+    is_document_valid: _.get(documentDetails, "is_document_valid"),
+    document_details: _.get(documentDetails, "document_details")
+  };
+};
+
+SmartDocuments.extractDocumentDetailsFromB64String = async (
+  params: ExtractDocumentDetailsFromB64StringRequest
+): Promise<ExtractDocumentDetailsFromImageResponse> => {
+
+  const {
+    document_type: documentType,
+    document_b64: documentB64,
+    ocr_library: ocrLibrary,
+    custom_parser: customParser,
+    custom_ocr: customOCR,
+    timeout: ocrTimeout
+  } = params;
+
+  const ocrResponse = await ocrRequest(
+    documentB64,
+    ocrLibrary,
+    customOCR,
+    ocrTimeout
+  );
+
+
   const rawText = _.get(ocrResponse, "raw_text", []);
   const isValidText = validateDocumentText(rawText);
   if (!isValidText) {

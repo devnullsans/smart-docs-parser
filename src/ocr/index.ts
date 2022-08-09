@@ -5,7 +5,8 @@ import Constants from "../constants";
 const OCR: any = {};
 
 OCR[Constants.OCR_AGENTS.GOOGLE_VISION] = {
-  extractDocumentText: GoogleVision.extractDocumentText
+  extractDocumentText: GoogleVision.extractDocumentText,
+  getDocumentText: GoogleVision.getDocumentText
 };
 
 export default OCR;

@@ -1,8 +1,10 @@
+// import { promises as fsp } from 'fs';
 import requestPromise from "request-promise";
 import _ from "lodash";
 import * as moment from "moment";
 import BluebirdPromise from "bluebird";
 import {
+  GetDocumentTypeRequest,
   ExtractDocumentTypeRequest,
   ExtractDocumentTypeResponse
 } from "../../interfaces/OCR";
@@ -27,6 +29,13 @@ const getBase64StringFromURL = async (
   });
   return Buffer.from(_.get(base64Image, "body", "")).toString("base64");
 };
+
+// const getBase64StringFromLOC = async (
+//   documentLoc: string,
+//   ocrTimeout: number
+// ) => {
+//   return await fsp.readFile(documentLoc, { encoding: 'base64' });
+// };
 
 const getApiUrl = apiKey => {
   const baseURL = Constants.BASE_URL;
@@ -96,5 +105,59 @@ GoogleVision.extractDocumentText = async (
 // ******************************************************* //
 // Logic for API handlers ends here                        //
 // ******************************************************* //
+GoogleVision.getDocumentText = async (
+  params: GetDocumentTypeRequest
+): Promise<ExtractDocumentTypeResponse> => {
+  const {
+    document_b64: documentB64,
+    api_key: apiKey,
+    timeout: ocrTimeout = Constants.OCR_TIMEOUT
+  } = params;
+  try {
+    if (_.isEmpty(apiKey)) {
+      return Constants.EMPTY_RESPONSE;
+    }
+    const base64FetchStartTime = moment.utc();
+    // const base64String = await getBase64StringFromLOC(documentB64, ocrTimeout);
+    // if (_.isEmpty(base64String)) {
+    //   return Constants.EMPTY_RESPONSE;
+    // } else console.log(base64String.substring(0, 1024));
+    const base64FetchEndTime = moment.utc();
+    const base64FetchTime = moment
+      .utc(base64FetchEndTime)
+      .diff(base64FetchStartTime);
+    const remainingOcrTime = _.max([0, ocrTimeout - base64FetchTime]);
+    if (!remainingOcrTime) {
+      return Constants.EMPTY_RESPONSE;
+    }
+
+    const payload = Constants.REQUEST_PAYLOAD;
+    payload["requests"][0]["image"]["content"] = documentB64;
+    const apiURL = getApiUrl(apiKey);
+    const visionResponse = await requestPromise({
+      method: "POST",
+      url: apiURL,
+      body: payload,
+      json: true,
+      timeout: remainingOcrTime
+    });
+
+    const annotations = _.get(visionResponse, "responses", []);
+    const fullTextAnnotation = _.find(annotations, annotation => {
+      const textAnnotation = _.get(annotation, "fullTextAnnotation", {});
+      return !_.isEmpty(textAnnotation);
+    });
+    if (_.isEmpty(fullTextAnnotation)) {
+      return Constants.EMPTY_RESPONSE;
+    }
+
+    const text = _.get(fullTextAnnotation, "fullTextAnnotation.text", "");
+    return {
+      raw_text: _.split(text, "\n")
+    };
+  } catch (err) {
+    throw new Error(JSON.stringify(err).substr(0, 200));
+  }
+};
 
 export default GoogleVision;

@@ -11,6 +11,15 @@ interface DocumentDetails {
   address?: string;
 }
 
+export interface ExtractDocumentDetailsFromB64StringRequest {
+  document_b64: string;
+  document_type: string;
+  ocr_library: string;
+  custom_parser?: CustomParser;
+  custom_ocr?: CustomOCR;
+  timeout?: number;
+}
+
 export interface ExtractDocumentDetailsFromImageRequest {
   document_url: string;
   document_type: string;
